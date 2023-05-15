@@ -1,6 +1,8 @@
-from PyQt5.QtWidgets import QApplication, QWidget,QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget,QVBoxLayout,QFileDialog,QLabel
 from PyQt5 import QtGui,uic
 from PyQt5.QtCore import Qt, QEvent,QPropertyAnimation,QRect
+import numpy as np
+import os
 # 自定义QWidget类
 class corWindow(QWidget):
     # 构造函数
@@ -22,9 +24,27 @@ class corWindow(QWidget):
         self.setAttribute(Qt.WA_StyledBackground)
         self.animation = QPropertyAnimation(self, b"geometry")
         self.layout.addWidget(self.ui)
+        self.ui.expBtn.clicked.connect(self.openfile)
+        # self.ui.contentWidget.setLayout(self.ui.contentLayout)
+        self.ui.scrollArea.setWidget(self.ui.contentWidget)
 
         # self.setStyleSheet("background-color: red;")
         # self.show()
+
+    def openfile(self):
+        print("open file")
+        filename,filetype = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd())
+        # 获得文件后缀名字
+        t = filename.split(".")[-1]
+        
+       
+        
+        if t == "npy":
+            data = np.load(filename)
+            self.ui.contentLayout.addWidget(QLabel(filename+"\t"+str(data.shape),self.ui.contentWidget))
+            
+        else:
+            print(filename,filetype)
 
     def slideout(self):
         # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
