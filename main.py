@@ -6,7 +6,7 @@ import sys,os
 import psutil
 from PyQt5 import QtGui,uic
 from PyQt5.QtWidgets import QApplication, QWidget,QDesktopWidget,QVBoxLayout,QFileDialog
-from PyQt5.QtCore import Qt, QEvent,QTimer
+from PyQt5.QtCore import Qt, QEvent,QTimer,QCoreApplication
 from PyQt5.QtGui import QResizeEvent
 from numpy import load
 
@@ -152,6 +152,7 @@ class Example(QWidget):
         
 
 if __name__ == '__main__':
+    QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
     ex = Example()
     sys.exit(app.exec_())

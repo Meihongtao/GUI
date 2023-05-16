@@ -20,7 +20,7 @@ class logWidget(QWidget):
         document_height = self.ui.textEdit.document().size().height()
         print(document_height)
         # 设置 QTextEdit 的高度
-        self.ui.textEdit.setFixedHeight(document_height)
+        self.ui.textEdit.setFixedHeight(int(document_height)+10)
         self.ui.show()
 
         

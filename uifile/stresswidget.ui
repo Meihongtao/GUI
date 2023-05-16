@@ -88,7 +88,7 @@
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="pushButton">
+        <widget class="QPushButton" name="modelBtn">
          <property name="font">
           <font>
            <family>幼圆</family>
@@ -120,7 +120,7 @@
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="pushButton_2">
+        <widget class="QPushButton" name="inverseBtn">
          <property name="font">
           <font>
            <family>幼圆</family>

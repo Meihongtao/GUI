@@ -1,11 +1,17 @@
 from PyQt5.QtWidgets import QApplication, QWidget,QVBoxLayout,QFileDialog,QLabel,QTextEdit
 from PyQt5 import QtGui,uic
 from PyQt5.QtCore import Qt, QEvent,QPropertyAnimation,QRect,pyqtSignal
+
+
 import numpy as np
 import pandas as pd
 import os
 
-
+import torch
+from torch import load as t_load
+import torch.utils.data as Data
+from torch import FloatTensor
+from models import tiny_model
 
 sensor_csv_to_node_dict = {
     "load": 45,
@@ -24,6 +30,7 @@ sensor_csv_to_node_dict = {
     "26465": [33,34,35],
     "26631": [36,37,38],
     "26003": [39,40,41],
+
     "26337": [41,42,43],
     "28090": [49,50,51],
     "27672": [52,53,54],
@@ -207,8 +214,8 @@ class stressWidget(QWidget):
         super(stressWidget,self).__init__(parent)
         self.uifile = uifile
         self.parent = parent
-       
-        
+        self.directory = None
+        self.model = None
         self.setParent(parent)
         self.initUI()
     
@@ -224,8 +231,51 @@ class stressWidget(QWidget):
    
         self.setAttribute(Qt.WA_StyledBackground)
         self.layout.addWidget(self.ui)
+        self.ui.stressBtn.clicked.connect(lambda:self.openfile("directory"))
+        self.ui.modelBtn.clicked.connect(lambda:self.openfile("model"))
+        self.ui.inverseBtn.clicked.connect(lambda:self.inverse_stress())
 
         # 事件绑定
+
+    def openfile(self,type="directory"):
+        # print("open file")
+        # 选择文件夹
+        if type=="directory":
+            self.directory = QFileDialog.getExistingDirectory(self,"选取文件夹",os.getcwd())
+        if type=="model":
+            filename,filetype = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd())
+            # 获得文件后缀名字
+            t = filename.split(".")[-1]
+            if t == "pth" and filename:
+                self.model = t_load(filename)
+                print(self.model)
+        
+    
+    def inverse_stress(self):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.model.to(device)
+        if self.directory is not None or self.model is not None:
+            paths = os.listdir(self.directory)
+            for batch,path in enumerate(paths):
+                data = np.load(os.path.join(self.directory,path))
+                print(data.shape)
+                preds = []
+                data_set = Data.TensorDataset(FloatTensor(data))
+                myLoader = Data.DataLoader(dataset=data_set,batch_size=256)
+                for i,(x_) in enumerate(myLoader):
+                    # 统计预测时间
+                    # x_ = FloatTensor(x_)
+                    pred = self.model(x_[0].to(device))
+        
+                    preds.append(pred.cpu().detach().numpy())
+                
+                    print(batch)
+
+        # print(pass_num/total_num)
+        # print(pred_time_cost)
+        # preds = np.vstack(preds)
+        # print(preds.shape)
+        # np.save("/home/coder/project/702-TiredDamage/data/npy/ZL预测应力/PREDICT-STRESS_batch-{}.npy".format(batch+1), preds)
 
 
     def slideout(self):
