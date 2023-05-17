@@ -1,6 +1,7 @@
+import typing
 from PyQt5.QtWidgets import QApplication, QWidget,QVBoxLayout,QFileDialog,QLabel,QTextEdit
 from PyQt5 import QtGui,uic
-from PyQt5.QtCore import Qt, QEvent,QPropertyAnimation,QRect,pyqtSignal
+from PyQt5.QtCore import QObject, Qt, QEvent,QPropertyAnimation,QRect,pyqtSignal,QThread
 
 
 import numpy as np
@@ -104,6 +105,8 @@ class corWindow(QWidget):
             self.ui.pointChose.clear()
             for node in self.NodeList:
                 self.ui.pointChose.addItem(str(node))
+            
+            
 
         
         
@@ -121,6 +124,7 @@ class corWindow(QWidget):
             
         else:
             print(filename,filetype)
+
         self.mySig.emit("加载文件："+filename)
 
     def mises_calculation(self,s1, s12, s2):
@@ -155,10 +159,7 @@ class corWindow(QWidget):
         return dataArray
 
     def slideout(self):
-        # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
-        # self.animation.setStartValue(self.geometry())  # 设置动画的起始矩形为当前窗体矩形
-        # self.animation.setEndValue(QRect(self.geometry().x(),self.geometry().y(),self.width(),0))  # 设置动画的结束矩形为目标矩形
-        # self.animation.start()  # 开始动画
+        
         self.hide()
      
 
@@ -201,12 +202,54 @@ class corWindow(QWidget):
 
     def slidein(self):
         self.show()
-        # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
-        # self.animation.setStartValue(self.geometry())  # 设置动画的起始矩形为当前窗体矩形
-        # self.animation.setEndValue(QRect(self.geometry().x(),self.geometry().y(),self.width(),0))  # 设置动画的结束矩形为目标矩形
-        # self.animation.start()  # 开始动画
-        # self.hide()
+        
+        
 
+
+class inverseThread(QThread):
+    finished = pyqtSignal()
+
+    progress = pyqtSignal(int)
+    logSig = pyqtSignal(str)
+    def __init__(self,directory,model):
+        super(inverseThread, self).__init__()
+        self.directory = directory
+        self.model = model
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.isRun = True
+
+    def stop(self):
+        self.isRun = False
+        
+
+    def run(self) -> None: 
+        while self.isRun:
+            self.model.to(self.device)
+            if self.directory is not None or self.model is not None:
+                paths = os.listdir(self.directory)
+                t_value = 100/(len(paths))
+                for batch,path in enumerate(paths):
+                    data = np.load(os.path.join(self.directory,path))
+                    print(data.shape)
+                    if self.isRun == False:
+                        break
+                    preds = []
+                    data_set = Data.TensorDataset(FloatTensor(data))
+                    myLoader = Data.DataLoader(dataset=data_set,batch_size=256)
+                    for i,(x_) in enumerate(myLoader):
+                        if self.isRun == False:
+                            break
+                        progress_value = ((i+1)/len(myLoader))*t_value+(batch*t_value)
+                        # 统计预测时间
+                        # x_ = FloatTensor(x_)
+                        pred = self.model(x_[0].to(self.device))
+                        preds.append(pred.cpu().detach().numpy())
+                        self.progress.emit(int(progress_value))
+                    self.logSig.emit("预测文件:{} 完毕".format(path))
+       
+            print("finished")
+            self.isRun = False
+            self.finished.emit()
 
 class stressWidget(QWidget):
     mySig = pyqtSignal(str)
@@ -216,6 +259,8 @@ class stressWidget(QWidget):
         self.parent = parent
         self.directory = None
         self.model = None
+        self.inverseThread = None
+        self.isInverse = False
         self.setParent(parent)
         self.initUI()
     
@@ -234,6 +279,9 @@ class stressWidget(QWidget):
         self.ui.stressBtn.clicked.connect(lambda:self.openfile("directory"))
         self.ui.modelBtn.clicked.connect(lambda:self.openfile("model"))
         self.ui.inverseBtn.clicked.connect(lambda:self.inverse_stress())
+        self.ui.progressBar.hide()
+        self.ui.stopBtn.hide()
+        self.ui.stopBtn.clicked.connect(lambda:self.destroy_inverse())
 
         # 事件绑定
 
@@ -252,30 +300,41 @@ class stressWidget(QWidget):
         
     
     def inverse_stress(self):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model.to(device)
-        if self.directory is not None or self.model is not None:
-            paths = os.listdir(self.directory)
-            for batch,path in enumerate(paths):
-                data = np.load(os.path.join(self.directory,path))
-                print(data.shape)
-                preds = []
-                data_set = Data.TensorDataset(FloatTensor(data))
-                myLoader = Data.DataLoader(dataset=data_set,batch_size=256)
-                for i,(x_) in enumerate(myLoader):
-                    # 统计预测时间
-                    # x_ = FloatTensor(x_)
-                    pred = self.model(x_[0].to(device))
-        
-                    preds.append(pred.cpu().detach().numpy())
-                
-                    print(batch)
+        print(self.isInverse)
+        if self.isInverse == False:
+            print("start inverse")
+            self.isInverse = True
+            self.ui.progressBar.show()
+            
+            self.inverseThread = inverseThread(self.directory,self.model)
+            self.inverseThread.logSig.connect(self.mySig.emit)
+            self.inverseThread.finished.connect(lambda:(
+                self.ui.inverseBtn.show(),
+                self.ui.stopBtn.hide(),
+                self.ui.progressBar.hide(),
+                self.thead_finished()
+            ))
+                                                        
+            
+            self.inverseThread.progress.connect(self.ui.progressBar.setValue)
+            
+            
+            self.inverseThread.start()
+            self.ui.stopBtn.show()
+            self.ui.inverseBtn.hide()
 
-        # print(pass_num/total_num)
-        # print(pred_time_cost)
-        # preds = np.vstack(preds)
-        # print(preds.shape)
-        # np.save("/home/coder/project/702-TiredDamage/data/npy/ZL预测应力/PREDICT-STRESS_batch-{}.npy".format(batch+1), preds)
+    def destroy_inverse(self):
+        if self.isInverse == True:
+            self.inverseThread.stop()
+            self.isInverse == False
+            self.ui.inverseBtn.show()
+            self.ui.stopBtn.hide()
+            
+            self.ui.progressBar.setValue(0)
+            self.ui.progressBar.hide()
+    
+    def thead_finished(self):
+        self.isInverse = False
 
 
     def slideout(self):

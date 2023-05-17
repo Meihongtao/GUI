@@ -48,7 +48,8 @@ class Example(QWidget):
         self.ui.buttomLayout.addWidget(self.corWidget)
         self.ui.buttomLayout.addWidget(self.stressWidget)
 
-        self.corWidget.mySig.connect(self.logging)
+        self.corWidget.mySig.connect(self.add_logging)
+        self.stressWidget.mySig.connect(self.add_logging)
     
         
 
@@ -91,12 +92,12 @@ class Example(QWidget):
         self.timer.start(1000)  # 1 秒钟更新一次
 
         # self.show()
-        content_widget = QWidget(self.ui.logArea)
-        self.ui.logArea.setWidget(content_widget)
+        # content_widget = QWidget(self.ui.logArea)
+        # self.ui.logArea.setWidget()
         self.logLayout = QVBoxLayout()
         self.logLayout.setAlignment(Qt.AlignTop)
         self.logLayout.setContentsMargins(0,0,0,0)
-        self.ui.logArea.setLayout(self.logLayout)
+        self.ui.contentWidget.setLayout(self.logLayout)
     
     def selectionchange(self,index):
         selected_option = self.ui.funcChose.itemText(index)
@@ -140,8 +141,8 @@ class Example(QWidget):
         else:
             print(filename,filetype)
 
-    def logging(self, msg):
-        self.logLayout.addWidget(logWidget(self.ui))
+    def add_logging(self, msg):
+        self.logLayout.addWidget(logWidget(self.ui,msg))
 
     def resizeEvent(self, event):
         self.resizeTimer.stop()
