@@ -1,12 +1,13 @@
 import typing
 from PyQt5.QtWidgets import QApplication, QWidget,QVBoxLayout,QFileDialog,QLabel,QTextEdit
 from PyQt5 import QtGui,uic
-from PyQt5.QtCore import QObject, Qt, QEvent,QPropertyAnimation,QRect,pyqtSignal,QThread
+from PyQt5.QtCore import QMutex, Qt, QEvent,QPropertyAnimation,QRect,pyqtSignal,QThread
 
-
+from scipy import signal
 import numpy as np
 import pandas as pd
-import os
+import os,rainflow
+import multiprocessing
 
 import torch
 from torch import load as t_load
@@ -224,8 +225,8 @@ class inverseThread(QThread):
 
     def run(self) -> None: 
         while self.isRun:
-            self.model.to(self.device)
             if self.directory is not None or self.model is not None:
+                self.model.to(self.device)
                 paths = os.listdir(self.directory)
                 t_value = 100/(len(paths))
                 for batch,path in enumerate(paths):
@@ -252,6 +253,7 @@ class inverseThread(QThread):
             self.finished.emit()
 
 class stressWidget(QWidget):
+
     mySig = pyqtSignal(str)
     def __init__(self,parent=None,uifile=None):
         super(stressWidget,self).__init__(parent)
@@ -335,6 +337,162 @@ class stressWidget(QWidget):
     
     def thead_finished(self):
         self.isInverse = False
+
+
+    def slideout(self):
+        # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
+        # self.animation.setStartValue(self.geometry())  # 设置动画的起始矩形为当前窗体矩形
+        # self.animation.setEndValue(QRect(self.geometry().x(),self.geometry().y(),self.width(),0))  # 设置动画的结束矩形为目标矩形
+        # self.animation.start()  # 开始动画
+        self.hide()
+
+    def slidein(self):
+        self.show()
+        # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
+        # self.animation.setStartValue(self.geometry())  # 设置动画的起始矩形为当前窗体矩形
+        # self.animation.setEndValue(QRect(self.geometry().x(),self.geometry().y(),self.width(),0))  # 设置动画的结束矩形为目标矩形
+        # self.animation.start()  # 开始动画
+        # self.hide()
+
+
+# def after_preocess(FA,avn,range_):
+#     patches = plt.hist(FA, avn, range=range_)
+#     n = []
+#     for i in range(len(patches[0])):
+#         n.append(patches[0][i])
+#     return np.asarray(n,dtype=np.int)
+
+def myrainflow(data):
+    counts = []
+    for rng, mean, count, i_start, i_end in rainflow.extract_cycles(data):
+        counts.append([rng, mean])
+    counts = np.asarray(counts)
+    FA = np.abs(counts[:,0] - counts[:,1])
+    return FA
+
+def pre_preocess(data):
+    
+    # 滤波
+    # data = func(Y=data,L=len(data))
+    # 步骤一：对载荷时间历程进行处理使之只包含峰谷峰谷交替出现
+    # data = handle(list(data))
+    data = np.asarray(data)
+    peak_indexes = signal.argrelextrema(data, np.greater,order=1)
+    valley_indexes = signal.argrelextrema(data, np.less,order=1)
+    index = np.append(peak_indexes,valley_indexes)
+    index.sort()
+    B = data[index]
+
+    # 步骤二：将波峰波谷拼接，使之成为一个循环
+    if len(B) == 0:
+        return np.zeros(1)
+    b = np.argmax(B)
+    B1 = B[b:len(B)]
+    B2 = B[0:b + 1]
+    C = np.append(B1, B2)
+    peak_indexes = signal.argrelextrema(C, np.greater,order=1)
+    valley_indexes = signal.argrelextrema(C, np.less,order=1)
+    index = np.append(peak_indexes,valley_indexes)
+    index.sort()
+    D = C[index]
+    n = len(D)
+    FA = myrainflow(D)
+    return FA
+
+
+
+
+
+class fatigueThread(QThread):
+    sig = pyqtSignal(str)
+    process = pyqtSignal(int)
+    finished = pyqtSignal()
+    def __init__(self,data,cores):
+        super().__init__()
+        self.data = data
+        self.isRunning = True
+        self.results = []
+        self.mutex = QMutex()
+        self.total_jobs = 30000
+        self.completed_jobs = 0
+        self.cores = cores
+        # core_count = QThread.idealThreadCount()
+        print(f"当前系统可用的理想线程数：{self.cores}")
+        
+    def myerrorcall(self,error):
+        print(error)
+        
+
+    def mycall(self,result):
+        self.mutex.lock()
+        self.completed_jobs += 1
+        self.mutex.unlock()
+        # print(f"completed jobs:{self.completed_jobs}")
+        # print(int((self.completed_jobs/self.total_jobs)*100))
+        self.process.emit(int((self.completed_jobs/self.total_jobs)*100))
+
+    
+    
+    def run(self) -> None:
+        pool = multiprocessing.Pool(processes=self.cores)
+        for i in range(self.total_jobs):
+            res = pool.apply_async(pre_preocess,args=(self.data[:,i],),callback=self.mycall,error_callback=self.myerrorcall)
+            self.results.append(res)
+        pool.close()
+        pool.join()
+        self.finished.emit()
+        # for i in self.results[:20]:
+        #     print(i.get().shape)
+        
+
+class fatigueWidget(QWidget):
+    # 构造函数
+    mySig = pyqtSignal(str)
+    def __init__(self,parent=None,uifile=None):
+        super(fatigueWidget,self).__init__(parent)
+        self.uifile = uifile
+        self.parent = parent
+        self.setParent(parent)
+        self.initUI()
+    
+    def initUI(self):
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        self.layout.setContentsMargins(0,0,0,0)
+
+        self.ui = uic.loadUi(self.uifile)
+        
+   
+        self.setAttribute(Qt.WA_StyledBackground)
+        self.layout.addWidget(self.ui)
+        self.ui.coreSlider.setRange(1, max(1,multiprocessing.cpu_count()/2-1))
+        self.ui.coreSlider.valueChanged.connect(lambda:self.ui.coreLabel.setText(str(self.ui.coreSlider.value())))
+        self.ui.cancelBtn.hide()
+        self.ui.progressBar.hide()
+        self.ui.fatigueBtn.clicked.connect(lambda:self.fatigue(cores=self.ui.coreSlider.value()))
+        # self.ui.modelBtn.clicked.connect(lambda:self.openfile("model"))
+        # self.ui.inverseBtn.clicked.connect(lambda:self.inverse_stress())
+        # self.ui.progressBar.hide()
+        # self.ui.stopBtn.hide()
+        # self.ui.stopBtn.clicked.connect(lambda:self.destroy_inverse())
+
+    def fatigue(self,cores):
+        data = np.load("D:\Desktop\GUI\data\sm_data.npy")
+        self.ui.progressBar.show()
+        self.ui.fatigueBtn.hide()
+        self.ui.cancelBtn.show()
+        self.ui.coreSlider.setEnabled(False)
+        self.fatigueThread = fatigueThread(data,cores)
+        self.fatigueThread.start()
+        self.fatigueThread.process.connect(self.ui.progressBar.setValue)
+        self.fatigueThread.finished.connect(lambda:(
+            self.ui.progressBar.setValue(0),
+            self.ui.progressBar.hide(),
+            self.ui.cancelBtn.hide(),
+            self.ui.fatigueBtn.show(),
+            self.ui.coreSlider.setEnabled(True)
+        ))
+        
 
 
     def slideout(self):

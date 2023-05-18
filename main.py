@@ -18,7 +18,7 @@ from matplotlib.backends.backend_qtagg import (
     FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
-from leftwindow import corWindow,stressWidget
+from leftwindow import corWindow,stressWidget,fatigueWidget
 from logwidget import logWidget
 
 class Example(QWidget):
@@ -35,7 +35,7 @@ class Example(QWidget):
         self.corWidget = corWindow(self,"./uifile/corwindow.ui")
         # self.corWidget.setStyleSheet("background-color: red;")
 
-        self.fatigueWidget = corWindow(self,"./uifile/corwindow.ui")
+        self.fatigueWidget = fatigueWidget(self,"./uifile/fatiguewidget.ui")
         # self.fatigueWidget.setStyleSheet("background-color: blue;")
 
         self.stressWidget = stressWidget(self,"./uifile/stresswidget.ui")
@@ -67,8 +67,8 @@ class Example(QWidget):
 
 
         self._static_ax = self.static_canvas.figure.subplots()
-        t = np.linspace(0, 10, 501)
-        self._static_ax.plot(t, np.tan(t), ".")
+        # t = np.linspace(0, 10, 501)
+        # self._static_ax.plot(t, np.tan(t), ".")
         # self._static_ax.clear()
         return self._static_ax
 
@@ -145,8 +145,8 @@ class Example(QWidget):
         self.logLayout.addWidget(logWidget(self.ui,msg))
 
     def resizeEvent(self, event):
-        self.resizeTimer.stop()
-        self.resizeTimer.start(100)  #
+        # self.resizeTimer.stop()
+        # self.resizeTimer.start(100)  #
         # 处理窗口大小调整事件
         QApplication.processEvents()
         super().resizeEvent(event)

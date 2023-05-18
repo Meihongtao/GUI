@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_Form(object):
     def setupUi(self, Form):
         Form.setObjectName("Form")
-        Form.resize(845, 147)
+        Form.resize(436, 147)
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout(Form)
         self.horizontalLayout_2.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -25,50 +25,42 @@ class Ui_Form(object):
         self.verticalLayout = QtWidgets.QVBoxLayout()
         self.verticalLayout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.label = QtWidgets.QLabel(Form)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        self.level = QtWidgets.QLabel(Form)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
-        self.label.setSizePolicy(sizePolicy)
+        sizePolicy.setHeightForWidth(self.level.sizePolicy().hasHeightForWidth())
+        self.level.setSizePolicy(sizePolicy)
         font = QtGui.QFont()
         font.setFamily("幼圆")
         font.setPointSize(9)
         font.setBold(True)
         font.setWeight(75)
-        self.label.setFont(font)
-        self.label.setStyleSheet("QLabel{\n"
-"background-color:rgb(170, 255, 255);\n"
-"border-solid:2px;\n"
+        self.level.setFont(font)
+        self.level.setStyleSheet("background-color:rgb(170, 255, 255);\n"
 "\n"
-"border-radius:3px;\n"
-"}")
-        self.label.setFrameShape(QtWidgets.QFrame.Panel)
-        self.label.setFrameShadow(QtWidgets.QFrame.Plain)
-        self.label.setLineWidth(1)
-        self.label.setMidLineWidth(0)
-        self.label.setObjectName("label")
-        self.verticalLayout.addWidget(self.label)
+"\n"
+"")
+        self.level.setLineWidth(1)
+        self.level.setMidLineWidth(0)
+        self.level.setObjectName("level")
+        self.verticalLayout.addWidget(self.level)
         self.horizontalLayout.addLayout(self.verticalLayout)
         self.verticalLayout_2 = QtWidgets.QVBoxLayout()
         self.verticalLayout_2.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.textEdit = QtWidgets.QTextEdit(Form)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.content = QtWidgets.QLabel(Form)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.textEdit.sizePolicy().hasHeightForWidth())
-        self.textEdit.setSizePolicy(sizePolicy)
-        self.textEdit.setStyleSheet("QTextEdit{\n"
-"background-color:white;\n"
-"}")
-        self.textEdit.setLineWidth(1)
-        self.textEdit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.textEdit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.textEdit.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContents)
-        self.textEdit.setMarkdown("")
-        self.textEdit.setObjectName("textEdit")
-        self.verticalLayout_2.addWidget(self.textEdit)
+        sizePolicy.setHeightForWidth(self.content.sizePolicy().hasHeightForWidth())
+        self.content.setSizePolicy(sizePolicy)
+        font = QtGui.QFont()
+        font.setFamily("幼圆")
+        font.setPointSize(10)
+        self.content.setFont(font)
+        self.content.setObjectName("content")
+        self.verticalLayout_2.addWidget(self.content)
         self.horizontalLayout.addLayout(self.verticalLayout_2)
         self.horizontalLayout_2.addLayout(self.horizontalLayout)
 
@@ -78,9 +70,5 @@ class Ui_Form(object):
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Form"))
-        self.label.setText(_translate("Form", "1:"))
-        self.textEdit.setHtml(_translate("Form", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
-"<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\n"
-"p, li { white-space: pre-wrap; }\n"
-"</style></head><body style=\" font-family:\'SimSun\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>"))
+        self.level.setText(_translate("Form", "  "))
+        self.content.setText(_translate("Form", "TextLabel"))

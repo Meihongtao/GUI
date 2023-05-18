@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'd:\Desktop\GUI\main.ui'
+# Form implementation generated from reading ui file 'd:\Desktop\GUI\uifile\main.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.9
 #
@@ -39,15 +39,14 @@ class Ui_Form(object):
         self.buttomLayout.setObjectName("buttomLayout")
         self.leftLayout.addLayout(self.buttomLayout)
         self.logArea = QtWidgets.QScrollArea(Form)
+        self.logArea.setStyleSheet("border:none")
         self.logArea.setWidgetResizable(True)
         self.logArea.setObjectName("logArea")
-        self.scrollAreaWidgetContents = QtWidgets.QWidget()
-        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 197, 186))
-        self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
-        self.logArea.setWidget(self.scrollAreaWidgetContents)
+        self.contentWidget = QtWidgets.QWidget()
+        self.contentWidget.setGeometry(QtCore.QRect(0, 0, 199, 380))
+        self.contentWidget.setObjectName("contentWidget")
+        self.logArea.setWidget(self.contentWidget)
         self.leftLayout.addWidget(self.logArea)
-        spacerItem = QtWidgets.QSpacerItem(0, 10, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.leftLayout.addItem(spacerItem)
         self.sysLayout = QtWidgets.QVBoxLayout()
         self.sysLayout.setSpacing(3)
         self.sysLayout.setObjectName("sysLayout")
