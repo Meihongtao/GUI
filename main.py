@@ -4,7 +4,7 @@
 # ------------------------------
 import sys,os
 import psutil
-from PyQt5 import QtGui,uic
+from PyQt5 import QtGui,uic,QtSvg
 from PyQt5.QtWidgets import QApplication, QWidget,QDesktopWidget,QVBoxLayout,QFileDialog
 from PyQt5.QtCore import Qt, QEvent,QTimer,QCoreApplication
 from PyQt5.QtGui import QResizeEvent
@@ -41,16 +41,21 @@ class Example(QWidget):
         self.stressWidget = stressWidget(self,"./uifile/stresswidget.ui")
         # self.stressWidget.setStyleSheet("background-color: yellow;")
         self.corWidget.slidein()
-        self.corWidget.setplot(self._static_ax)
         self.fatigueWidget.slideout()
         self.stressWidget.slideout()
         self.ui.buttomLayout.addWidget(self.fatigueWidget)
         self.ui.buttomLayout.addWidget(self.corWidget)
         self.ui.buttomLayout.addWidget(self.stressWidget)
+        self.ui.setBtn.setIcon(QtGui.QIcon("./icons/Settings.svg"))
+        self.ui.setBtn.setContentsMargins(0,0,0,0)
+        self.ui.undoBtn.setIcon(QtGui.QIcon("./icons/Undo.svg"))
+        self.ui.undoBtn.setContentsMargins(0,0,0,0)
 
         self.corWidget.mySig.connect(self.add_logging)
         self.stressWidget.mySig.connect(self.add_logging)
-    
+        self.fatigueWidget.mySig.connect(self.add_logging)
+
+        self.ui.undoBtn.clicked.connect(self.undo)
         
 
 
@@ -62,7 +67,9 @@ class Example(QWidget):
         # toolbar as a plain widget instead.
         self.ui.plotLayout.addWidget(self.static_canvas)
         # layout.addWidget(static_canvas)
-        self.ui.plotLayout.addWidget(NavigationToolbar(self.static_canvas, self))
+        navBar = NavigationToolbar(self.static_canvas, self)
+       
+        self.ui.plotLayout.addWidget(navBar)
         
 
 
@@ -141,8 +148,13 @@ class Example(QWidget):
         else:
             print(filename,filetype)
 
-    def add_logging(self, msg):
-        self.logLayout.addWidget(logWidget(self.ui,msg))
+    def undo(self):
+        self.corWidget.undo()
+        self.fatigueWidget.undo()
+        self.stressWidget.undo()
+
+    def add_logging(self, data):
+        self.logLayout.insertWidget(0,logWidget(self.ui,data["msg"],type=data["type"]))
 
     def resizeEvent(self, event):
         # self.resizeTimer.stop()
