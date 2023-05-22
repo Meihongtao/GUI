@@ -210,8 +210,11 @@ class inverseThread(QThread):
         super(inverseThread, self).__init__()
         self.directory = directory
         self.savedir = savedir
-        self.model = model
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.model = model.eval()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.batch_size = 128
+        self.x_cuda = None
+
         # self.device = torch.device("cpu")
         print(self.device)
         self.isRun = True
@@ -235,26 +238,30 @@ class inverseThread(QThread):
                         return
                     self.preds = np.zeros((self.data.shape[0],363))
                     self.data = Data.TensorDataset(FloatTensor(self.data))
-                    self.myLoader = Data.DataLoader(dataset=self.data,batch_size=1024,shuffle=False)
-                  
-                    for i,(x_,) in enumerate(self.myLoader):
-                        if self.isRun == False:
+                    self.myLoader = Data.DataLoader(dataset=self.data,batch_size=self.batch_size,shuffle=False)
+                    with torch.no_grad():
+                        for i,(x_,) in enumerate(self.myLoader):
+                            if self.isRun == False:
 
-                            self.finished.emit()
-                            return
-                        progress_value = ((i+1)/len(self.myLoader))*t_value+(batch*t_value)
-                        # 统计预测时间
-                        # x_ = FloatTensor(x_)
-                        pred = self.model(x_.to(self.device)).cpu().detach().numpy()
-                        if (i+1)*1024 <= self.preds.shape[0]:
-                            self.preds[i*1024:(i+1)*1024] = pred
-                        else:
-                            self.preds[i*1024:] = pred
-                        self.progress.emit(int(progress_value)-1)
+                                self.finished.emit()
+                                return
+                            progress_value = ((i+1)/len(self.myLoader))*t_value+(batch*t_value)
+                            # 统计预测时间
+                            self.x_cuda = x_.to(self.device)
+                           
+                            self.pred = self.model(self.x_cuda).cpu().numpy()
+                            if (i+1)*self.batch_size <= self.preds.shape[0]:
+                                self.preds[i*self.batch_size:(i+1)*self.batch_size] = self.pred
+                            else:
+                                self.preds[i*self.batch_size:] = self.pred
+                            del self.x_cuda,self.pred
+                            torch.cuda.empty_cache()
+                           
+                            self.progress.emit(int(progress_value))
                     if torch.cuda.is_available() or "cuda" in self.device.type.lower():
                         torch.cuda.empty_cache()
-                    np.save(os.path.join(self.savedir,path),self.preds)
-                    self.progress.emit(100)
+                    # np.save(os.path.join(self.savedir,path),self.preds)
+                    
                     self.logSig.emit({"type":"info","msg":"预测文件:{} 完毕".format(path)})
                     
                     
@@ -391,6 +398,7 @@ class stressWidget(QWidget):
         self.ui.stopBtn.hide()
         self.ui.inverseBtn.show()
         self.isInverse = False
+        gc.collect()
 
     def slideout(self):
         # self.animation.setDuration(2000)  # 设置动画的持续时间为1秒
