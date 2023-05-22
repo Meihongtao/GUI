@@ -2,7 +2,7 @@
 # 2021/05/25
 # By River
 # ------------------------------
-import sys,os
+import sys,os,gc
 import psutil
 from PyQt5 import QtGui,uic,QtSvg
 from PyQt5.QtWidgets import QApplication, QWidget,QDesktopWidget,QVBoxLayout,QFileDialog
@@ -109,8 +109,6 @@ class Example(QWidget):
     def selectionchange(self,index):
         selected_option = self.ui.funcChose.itemText(index)
         if selected_option == "关联性分析":
-            # self.ui.buttomLayout.addWidget(QWidget(self))
-            self.corWidget.setplot(self._static_ax)
             self.corWidget.slidein()
             
             self.fatigueWidget.slideout()
@@ -128,12 +126,15 @@ class Example(QWidget):
         print("Selected option:", selected_option)
 
     def updateSysinfo(self):
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_usage_mb = memory_info.rss / 1024 / 1024  # 单位转换为MB
         memory_usage = psutil.virtual_memory().percent
         cpu_usage = psutil.cpu_percent()
         if cpu_usage<=10:
             cpu_usage = 10*cpu_usage
         
-
+        self.ui.sysLabel.setText("内存占用:{:.2f}MB".format(memory_usage_mb))
         self.ui.cpuBar.setValue(int(cpu_usage))
         self.ui.memBar.setValue(int(memory_usage))
 
@@ -152,9 +153,17 @@ class Example(QWidget):
         self.corWidget.undo()
         self.fatigueWidget.undo()
         self.stressWidget.undo()
+        gc.collect()
+        
 
     def add_logging(self, data):
         self.logLayout.insertWidget(0,logWidget(self.ui,data["msg"],type=data["type"]))
+
+    def mem_watcher(self):
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_usage = memory_info.rss / 1024 / 1024  # 单位转换为MB
+        print("memory_usage:", memory_usage)
 
     def resizeEvent(self, event):
         # self.resizeTimer.stop()

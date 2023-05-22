@@ -7,7 +7,7 @@ from scipy import signal
 from scipy.fft import ifft,fft
 import numpy as np
 import pandas as pd
-import os,rainflow,re,math
+import os,rainflow,re,math,gc
 import multiprocessing
 
 import torch
@@ -15,6 +15,8 @@ from torch import load as t_load
 import torch.utils.data as Data
 from torch import FloatTensor
 from models import tiny_model
+
+from memory_profiler import profile
 
 global_mutex = QMutex()
 fatigue_stop = False
@@ -94,7 +96,7 @@ class corWindow(QWidget):
       
 
     def openfile(self,type="npy"):
-        print("open file")
+        # print("open file")
         filename,filetype = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd())
         # 获得文件后缀名字
         t = filename.split(".")[-1]
@@ -112,9 +114,8 @@ class corWindow(QWidget):
         if type == "exp" and filename and t=="csv":
             self.re_data = pd.read_csv(filename)
             
-        else:
-            print(filename,filetype)
-        if filename != None:
+       
+        if filename != "":
             self.mySig.emit({"type":"info","msg":"加载文件："+filename} )
 
     def mises_calculation(self,s1, s12, s2):
@@ -150,7 +151,6 @@ class corWindow(QWidget):
      
     def plot(self):
         if self.re_data is None or self.sm_data is None or self.NodeList is None or sensor_csv_to_node_dict is None:
-            print("no data")
             self.mySig.emit({"type":"warning","msg":"请先加载数据"})
             return
         # sensorNodeList = [26234,25799,26528,26498,26009,25834,26084,25507,26465,26631,27158,27645,27943,27844,27572,27662,27765,27988,27738,27754,26254,25753,26299,28090,27672,27490,27280,27083,27600,26003,26337]
@@ -205,19 +205,22 @@ class inverseThread(QThread):
     finished = pyqtSignal()
 
     progress = pyqtSignal(int)
-    logSig = pyqtSignal(str)
+    logSig = pyqtSignal(dict)
     def __init__(self,directory,savedir,model):
         super(inverseThread, self).__init__()
         self.directory = directory
         self.savedir = savedir
         self.model = model
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device("cpu")
+        print(self.device)
         self.isRun = True
 
     def stop(self):
         self.isRun = False
+       
         
-
+    # @profile
     def run(self) -> None: 
         while self.isRun:
             if self.directory is not None or self.model is not None and self.savedir is not None:
@@ -225,28 +228,44 @@ class inverseThread(QThread):
                 paths = os.listdir(self.directory)
                 t_value = 100/(len(paths))
                 for batch,path in enumerate(paths):
-                    data = np.load(os.path.join(self.directory,path))
-                    print(data.shape)
+                    self.data = np.load(os.path.join(self.directory,path))
+                    print(self.data.shape)
                     if self.isRun == False:
-                        break
-                    preds = []
-                    data_set = Data.TensorDataset(FloatTensor(data))
-                    myLoader = Data.DataLoader(dataset=data_set,batch_size=256)
-                    for i,(x_) in enumerate(myLoader):
+                        self.finished.emit()
+                        return
+                    self.preds = np.zeros((self.data.shape[0],363))
+                    self.data = Data.TensorDataset(FloatTensor(self.data))
+                    self.myLoader = Data.DataLoader(dataset=self.data,batch_size=1024,shuffle=False)
+                  
+                    for i,(x_,) in enumerate(self.myLoader):
                         if self.isRun == False:
-                            break
-                        progress_value = ((i+1)/len(myLoader))*t_value+(batch*t_value)
+
+                            self.finished.emit()
+                            return
+                        progress_value = ((i+1)/len(self.myLoader))*t_value+(batch*t_value)
                         # 统计预测时间
                         # x_ = FloatTensor(x_)
-                        pred = self.model(x_[0].to(self.device))
-                        preds.append(pred.cpu().detach().numpy())
-                        self.progress.emit(int(progress_value))
-                    self.logSig.emit("预测文件:{} 完毕".format(path))
-                    np.save(os.path.join(self.savedir,path),np.concatenate(preds,axis=0))
-       
-            print("finished")
+                        pred = self.model(x_.to(self.device)).cpu().detach().numpy()
+                        if (i+1)*1024 <= self.preds.shape[0]:
+                            self.preds[i*1024:(i+1)*1024] = pred
+                        else:
+                            self.preds[i*1024:] = pred
+                        self.progress.emit(int(progress_value)-1)
+                    if torch.cuda.is_available() or "cuda" in self.device.type.lower():
+                        torch.cuda.empty_cache()
+                    np.save(os.path.join(self.savedir,path),self.preds)
+                    self.progress.emit(100)
+                    self.logSig.emit({"type":"info","msg":"预测文件:{} 完毕".format(path)})
+                    
+                    
+                
+    
+           
+            # del self.model,self.data,self.preds
+            # gc.collect()
             self.isRun = False
             self.finished.emit()
+        
 
 class stressWidget(QWidget):
 
@@ -290,26 +309,32 @@ class stressWidget(QWidget):
         # 选择文件夹
         if type=="directory":
             self.directory = QFileDialog.getExistingDirectory(self,"选取文件夹",os.getcwd())
-            self.ui.stressLabel.setText(self.directory)
+            # self.ui.stressLabel.setText(self.directory)
+            if self.directory!="":
+                self.mySig.emit({"type":"info","msg":"加载文件夹:{}".format(self.directory)})
         if type=="model":
             filename,filetype = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd())
-            self.ui.modelLabel.setText(filename)
             # 获得文件后缀名字
             t = filename.split(".")[-1]
             if t == "pth" and filename:
                 self.model = t_load(filename)
-                print(self.model)
+            if filename!="":
+                # self.ui.modelLabel.setText(filename)
+                self.mySig.emit({"type":"info","msg":"加载模型文件:{}".format(filename)})
         if type=="save":
             self.savedir = QFileDialog.getExistingDirectory(self, "选取文件夹", os.getcwd())
-            self.ui.saveLabel.setText(self.savedir)
+            # self.ui.saveLabel.setText(self.savedir)
+            if self.savedir!="":
+                self.mySig.emit({"type":"info","msg":"保存文件夹:{}".format(self.savedir)})
             
             
         
     
     def inverse_stress(self):
-        print(self.isInverse)
+       
+        # print(self.isInverse)
         if self.isInverse == False:
-            print("start inverse")
+            # print("start inverse")
             if self.directory is None or self.model is None or self.savedir is None:
                 self.mySig.emit({"type":"warning","msg":"请先加载数据"})
                 return
@@ -321,9 +346,10 @@ class stressWidget(QWidget):
                 self.ui.inverseBtn.show(),
                 self.ui.stopBtn.hide(),
                 self.ui.progressBar.hide(),
-                self.thead_finished()
+                self.ui.progressBar.setValue(0),
+                self.thead_finished(),           
             ))
-                                                        
+                                          
             
             self.inverseThread.progress.connect(self.ui.progressBar.setValue)
             
@@ -333,17 +359,25 @@ class stressWidget(QWidget):
             self.ui.inverseBtn.hide()
 
     def destroy_inverse(self):
-        if self.isInverse == True:
+        if self.isInverse == True and self.inverseThread is not None:
             self.inverseThread.stop()
+            # self.inverseThread.terminate()
+            # self.inverseThread.wait()
             self.isInverse == False
             self.ui.inverseBtn.show()
             self.ui.stopBtn.hide()
             
             self.ui.progressBar.setValue(0)
             self.ui.progressBar.hide()
-    
+
+
     def thead_finished(self):
         self.isInverse = False
+        # self.inverseThread.terminate()
+        # self.inverseThread.wait()
+        # self.inverseThread.deleteLater()
+        # self.inverseThread = None
+        # print(gc.garbage)             
 
     def undo(self):
         self.directory = None
@@ -485,9 +519,10 @@ class fatigueThread(QThread):
         self.total_jobs = 300
         self.completed_jobs = 0
         self.cores = cores
+        self.pool = None
         
         # core_count = QThread.idealThreadCount()
-        print(f"当前系统可用的理想线程数：{self.cores}")
+        # print(f"当前系统可用的理想线程数：{self.cores}")
         
     def myerrorcall(self,error):
         print(error)
@@ -508,14 +543,16 @@ class fatigueThread(QThread):
         self.isRunning = False
         self.finished.emit()
 
-    
+    # @profile
     def run(self) -> None:
         self.isRunning = True
         paths = os.listdir(self.dir)
         self.total_jobs = len(paths)
         paths.sort(key=lambda x: int(re.findall(r'\d+', x)[0]))
+        FAS = []
         self.pool = multiprocessing.Pool(processes=self.cores)
-        for path in paths:
+        self.pool.daemon = True
+        for path in paths: 
             self.data = np.load(os.path.join(self.dir,path))
             res = self.pool.apply_async(pre_preocess,args=(self.data[:,self.points],),callback=self.mycall,error_callback=self.myerrorcall)
             self.results.append(res)
@@ -523,17 +560,17 @@ class fatigueThread(QThread):
         
         self.pool.close()
         self.pool.join()
-        FAS = []
+            
         for index,i in enumerate(self.results):
             FAS.extend(i.get())
-            print(index,'\t',i.get().shape)
+            # print(index,'\t',i.get().shape)
         FAS = np.asarray(FAS)
         min_,max_ = np.min(FAS),np.max(FAS)
         split = np.linspace(min_,max_,51) 
         counts = np.zeros(50)
         for i in range(50):
             counts[i] = ((FAS>split[i]) & (FAS<=split[i+1])).sum()
-        print(len(counts))
+        # print(len(counts))
         S = []
         for i in range(50):
             S.append(min_+(max_-min_)/50*(i+0.5))
@@ -548,8 +585,8 @@ class fatigueThread(QThread):
         for i in range(0, 50):
             Damage = Damage + counts[i] / N[i]
         Damage = round(Damage, 5)
-        print("Damage:", Damage)
-        print("S:", S)
+        # print("Damage:", Damage)
+        # print("S:", S)
         ret_data = {
             "damage":Damage,
             "counts":counts,
@@ -557,6 +594,9 @@ class fatigueThread(QThread):
         }
         self.dataSig.emit(ret_data)
         self.finished.emit()
+
+        del self.pool,self.results,self.data
+        gc.collect()
         
         
 
@@ -569,6 +609,7 @@ class fatigueWidget(QWidget):
         self.saveDir = None
         self.inputDir = None
         self.pointDir = None
+        self.NodeList = []
         self.parent = parent
         self.setParent(parent)
         self.initUI()
@@ -590,24 +631,28 @@ class fatigueWidget(QWidget):
         self.ui.coreSlider.valueChanged.connect(lambda:self.ui.coreLabel.setText(str(self.ui.coreSlider.value())))
         self.ui.cancelBtn.hide()
         self.ui.progressBar.hide()
+        # 保存功能暂定
+        # self.ui.saveBtn.hide()
         self.ui.fatigueBtn.clicked.connect(lambda:self.fatigue(cores=self.ui.coreSlider.value()))
 
 
         self.ui.cancelBtn.clicked.connect(self.cancel)
+        # self.ui.pointBox.currentIndexChanged.connect(self.updateNodeList)
       
 
     def fatigue(self,cores):
-        if self.inputDir is None or self.pointDir is None or self.saveDir is None:
+        if self.inputDir is None or self.pointDir is None or self.saveDir is None or self.NodeList == []:
             self.mySig.emit({"type":"warning","msg":"计算疲劳前请先加载数据"})
             return    
         
-    
         self.ui.progressBar.show()
         self.ui.fatigueBtn.hide()
         self.ui.cancelBtn.show()
         self.ui.coreSlider.setEnabled(False)
         
-        self.fatigueThread = fatigueThread(self.inputDir, cores,1)
+        point_index = self.NodeList.index(int(self.ui.pointBox.currentText())) 
+
+        self.fatigueThread = fatigueThread(self.inputDir, cores,point_index)
         self.fatigueThread.start()
         self.fatigueThread.process.connect(self.ui.progressBar.setValue)
         self.fatigueThread.finished.connect(lambda:(
@@ -619,28 +664,43 @@ class fatigueWidget(QWidget):
         ))
         self.fatigueThread.dataSig.connect(self.plot)
 
+    # 文件读取操作
     def openfile(self,type):
         if type=="inputDir":
             self.inputDir = QFileDialog.getExistingDirectory(self,"选取文件夹",os.getcwd())
-            self.ui.inputLabel.setText(self.inputDir)
+            # self.ui.inputLabel.setText(self.inputDir)
+            if self.inputDir != "":
+                self.mySig.emit({"type":"info","msg":"应力文件路径："+self.inputDir})
         if type=="pointDir":
             filename,filetype = QFileDialog.getOpenFileName(self, 'Open file', os.getcwd())
             self.pointDir = filename
-            self.ui.pointLabel.setText(filename)
-            # 获得文件后缀名字
-            # t = filename.split(".")[-1]
-            # if t == "pth" and filename:
-            #     self.model = t_load(filename)
-            #     print(self.model)
+            # self.ui.pointLabel.setText(filename)
+            if self.pointDir != "":
+                self.mySig.emit({"type":"info","msg":"编号文件路径："+self.pointDir})
+                try:
+                    with open(filename, 'r') as f:
+                        self.NodeList = list(map(int, f.read().split(',')))
+                    self.ui.pointBox.clear()
+                    for node in self.NodeList:
+                        self.ui.pointBox.addItem(str(node))
+                except Exception as e:
+                    self.pointDir = None
+                    print(e)
+                    self.ui.pointLabel.setText("")
+                    self.mySig.emit({"type":"warning","msg":"读取编号文件失败"})
+
         if type=="saveDir":
             self.saveDir = QFileDialog.getExistingDirectory(self, "选取文件夹", os.getcwd())
-            self.ui.saveLabel.setText(self.saveDir)
+            # self.ui.saveLabel.setText(self.saveDir)
+            if self.saveDir != "":
+                self.mySig.emit({"type":"info","msg":"保存路径："+self.saveDir})
      
     def cancel(self):
         if self.fatigueThread:
             print("cancel")
             self.fatigueThread.mystop()
 
+    # 绘图
     def plot(self,data):
         if data is None:
             return
@@ -649,16 +709,18 @@ class fatigueWidget(QWidget):
         self.parent._static_ax.clear()
         self.parent._static_ax.ticklabel_format(style='sci', axis='both', scilimits=(0, 0))
         self.parent._static_ax.bar(stress,data["counts"],tick_label=stress)
-        self.parent._static_ax.set_xticklabels(stress,rotation=60,fontsize=8)
+        self.parent._static_ax.set_xticklabels(stress,rotation=60,fontsize=6)
         self.parent._static_ax.set_xlabel("Stress/MPa")
         self.parent._static_ax.set_ylabel("Circulate Number")
         self.parent._static_ax.set_title("Fatigue Damage:{:.5f}".format(data["damage"]))
         self.parent.static_canvas.draw()
 
+    # 重置界面
     def undo(self):
         self.inputDir = None
         self.pointDir = None
         self.saveDir = None
+        self.NodeList = []
         self.ui.inputLabel.setText("")
         self.ui.pointLabel.setText("")
         self.ui.saveLabel.setText("")
